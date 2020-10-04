@@ -14,58 +14,63 @@ namespace DDNS.DAL {
         static ClodflareDAL () {
 
             //TODO: edit the code to use client factory
-            using (var client = new HttpClient ()) {
+            using (var httpClientHandler = new HttpClientHandler ()) {
+                httpClientHandler.ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => { return true; };
+                using (var client = new HttpClient ()) {
 
-                client.DefaultRequestHeaders.Accept.Clear ();
-                client.DefaultRequestHeaders.Add ("X-Auth-Email", email);
-                client.DefaultRequestHeaders.Add ("X-Auth-Key", toekn);
-                client.DefaultRequestHeaders.Accept
-                    .Add (new MediaTypeWithQualityHeaderValue ("application/json"));
-                GetZodeID (client).Wait ();
+                    client.DefaultRequestHeaders.Accept.Clear ();
+                    client.DefaultRequestHeaders.Add ("X-Auth-Email", email);
+                    client.DefaultRequestHeaders.Add ("X-Auth-Key", toekn);
+                    client.DefaultRequestHeaders.Accept
+                        .Add (new MediaTypeWithQualityHeaderValue ("application/json"));
+                    GetZodeID (client).Wait ();
+                }
             }
 
         }
         private async Task updateClodflare () {
 
-            using (var client = new HttpClient ()) {
+            using (var httpClientHandler = new HttpClientHandler ()) {
+                httpClientHandler.ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => { return true; };
+                using (var client = new HttpClient ()) {
 
-                client.DefaultRequestHeaders.Accept.Clear ();
-                client.DefaultRequestHeaders.Add ("X-Auth-Email", email);
-                client.DefaultRequestHeaders.Add ("X-Auth-Key", toekn);
-                client.DefaultRequestHeaders.Accept
-                    .Add (new MediaTypeWithQualityHeaderValue ("application/json"));
+                    client.DefaultRequestHeaders.Accept.Clear ();
+                    client.DefaultRequestHeaders.Add ("X-Auth-Email", email);
+                    client.DefaultRequestHeaders.Add ("X-Auth-Key", toekn);
+                    client.DefaultRequestHeaders.Accept
+                        .Add (new MediaTypeWithQualityHeaderValue ("application/json"));
 
-                var temp = getDnsList (client).Result;
-                List<string> dnsToCreate = new List<string> ();
-                foreach (var item in services) {
-                    if (!temp.Exists (x => x == item)) {
-                        dnsToCreate.Add (item);
-                    }
-                }
-                if (dnsToCreate.Count > 0) {
-
-                    DnsCreate dnsCreate;
-                    foreach (var item in dnsToCreate) {
-                        dnsCreate = new DnsCreate () {
-                            type = "A",
-                            name = item.Split ('.') [0],
-                            content = getPublicIp (),
-                            ttl = 120,
-                            priority = 10,
-                            proxied = true
-                        };
-                        using (var content = new StringContent (Newtonsoft.Json.JsonConvert.SerializeObject (dnsCreate), System.Text.Encoding.UTF8, "application/json")) {
-
-                            var res = await client.PostAsync (dnslisturi, content);
-                        }
-
-                        if ("status 200" == "status 200") {
-                            dnsList.Add (item);
-
+                    var temp = getDnsList (client).Result;
+                    List<string> dnsToCreate = new List<string> ();
+                    foreach (var item in services) {
+                        if (!temp.Exists (x => x == item)) {
+                            dnsToCreate.Add (item);
                         }
                     }
-                }
+                    if (dnsToCreate.Count > 0) {
 
+                        DnsCreate dnsCreate;
+                        foreach (var item in dnsToCreate) {
+                            dnsCreate = new DnsCreate () {
+                                type = "A",
+                                name = item.Split ('.') [0],
+                                content = getPublicIp (),
+                                ttl = 120,
+                                priority = 10,
+                                proxied = true
+                            };
+                            using (var content = new StringContent (Newtonsoft.Json.JsonConvert.SerializeObject (dnsCreate), System.Text.Encoding.UTF8, "application/json")) {
+
+                                var res = await client.PostAsync (dnslisturi, content);
+                            }
+
+                            if ("status 200" == "status 200") {
+                                dnsList.Add (item);
+
+                            }
+                        }
+                    }
+                }
             }
         }
 
