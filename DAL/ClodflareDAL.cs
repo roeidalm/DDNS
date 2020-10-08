@@ -11,9 +11,12 @@ namespace DDNS.DAL {
         private static string email = EnvironmentHelper.Arguments["email"];
         private static string toekn = EnvironmentHelper.Arguments["toeknclodflare"];
         private static string zoneId = "";
+        private static Dictionary<string, string> dnsList = new Dictionary<string, string> ();
         static ClodflareDAL () {
 
             //TODO: edit the code to use client factory
+
+            //this will init the zone ID
             using (var httpClientHandler = new HttpClientHandler ()) {
                 httpClientHandler.ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => { return true; };
                 using (var client = new HttpClient ()) {
@@ -23,13 +26,21 @@ namespace DDNS.DAL {
                     client.DefaultRequestHeaders.Add ("X-Auth-Key", toekn);
                     client.DefaultRequestHeaders.Accept
                         .Add (new MediaTypeWithQualityHeaderValue ("application/json"));
-                    GetZodeID (client).Wait ();
+                    var msg = client.GetStringAsync ("https://api.cloudflare.com/client/v4/zones").GetAwaiter ().GetResult ();
+                    zoneId = JObject.Parse (msg).ToObject<ZoneIdData> ().result[0].id;
                 }
             }
 
         }
-        private async Task updateClodflare () {
 
+        public Dictionary<string, string> getDnsList () {
+            if (dnsList.Count == 0) {
+                refreshDnsList ();
+            }
+            return dnsList;
+
+        }
+        public async void refreshDnsList () {
             using (var httpClientHandler = new HttpClientHandler ()) {
                 httpClientHandler.ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => { return true; };
                 using (var client = new HttpClient ()) {
@@ -39,60 +50,85 @@ namespace DDNS.DAL {
                     client.DefaultRequestHeaders.Add ("X-Auth-Key", toekn);
                     client.DefaultRequestHeaders.Accept
                         .Add (new MediaTypeWithQualityHeaderValue ("application/json"));
-
-                    var temp = getDnsList (client).Result;
-                    List<string> dnsToCreate = new List<string> ();
-                    foreach (var item in services) {
-                        if (!temp.Exists (x => x == item)) {
-                            dnsToCreate.Add (item);
-                        }
+                    string dnslisturi = string.Format ("https://api.cloudflare.com/client/v4/zones/{0}/dns_records", zoneId);
+                    var data = await client.GetStringAsync (dnslisturi);
+                    var dnsObjlist = JObject.Parse (data).ToObject<DnsListData> ().result;
+                    Dictionary<string, string> temp = new Dictionary<string, string> ();
+                    foreach (var item in dnsObjlist) {
+                        temp.Add (item.name, item.id);
                     }
-                    if (dnsToCreate.Count > 0) {
+                    dnsList = temp;
+                }
+            }
+        }
+        public async Task createNewARecordesClodflare (List<string> dnsNameToCreate) {
+            using (var client = new HttpClient ()) {
 
-                        DnsCreate dnsCreate;
-                        foreach (var item in dnsToCreate) {
-                            dnsCreate = new DnsCreate () {
-                                type = "A",
-                                name = item.Split ('.') [0],
-                                content = getPublicIp (),
-                                ttl = 120,
-                                priority = 10,
-                                proxied = true
-                            };
-                            using (var content = new StringContent (Newtonsoft.Json.JsonConvert.SerializeObject (dnsCreate), System.Text.Encoding.UTF8, "application/json")) {
+                client.DefaultRequestHeaders.Accept.Clear ();
+                client.DefaultRequestHeaders.Add ("X-Auth-Email", email);
+                client.DefaultRequestHeaders.Add ("X-Auth-Key", toekn);
+                client.DefaultRequestHeaders.Accept
+                    .Add (new MediaTypeWithQualityHeaderValue ("application/json"));
 
-                                var res = await client.PostAsync (dnslisturi, content);
-                            }
+                DnsCreate dnsCreate;
+                string publicIP = GetIP ();
+                string dnsListUri = string.Format ("https://api.cloudflare.com/client/v4/zones/{0}/dns_records", zoneId);
+                foreach (var item in dnsNameToCreate) {
+                    dnsCreate = new DnsCreate () {
+                        type = "A",
+                        name = item.Split ('.') [0],
+                        content = publicIP,
+                        ttl = 120,
+                        priority = 10,
+                        proxied = true
+                    };
+                    using (var content = new StringContent (Newtonsoft.Json.JsonConvert.SerializeObject (dnsCreate), System.Text.Encoding.UTF8, "application/json")) {
 
-                            if ("status 200" == "status 200") {
-                                dnsList.Add (item);
+                        var res = await client.PostAsync (dnsListUri, content);
 
-                            }
+                        if (res.StatusCode == System.Net.HttpStatusCode.OK) {
+                            var a = res.Content.ReadAsStringAsync ().Result;
+                            dnsList.Add (item, "");
                         }
                     }
                 }
             }
         }
+        public async Task updateARecordesClodflare (Dictionary<string, string> dnsIDToUpdate) {
+            using (var client = new HttpClient ()) {
 
-        private static async Task GetZodeID (HttpClient client) {
-            var msg = await client.GetStringAsync ("https://api.cloudflare.com/client/v4/zones");
+                client.DefaultRequestHeaders.Accept.Clear ();
+                client.DefaultRequestHeaders.Add ("X-Auth-Email", email);
+                client.DefaultRequestHeaders.Add ("X-Auth-Key", toekn);
+                client.DefaultRequestHeaders.Accept
+                    .Add (new MediaTypeWithQualityHeaderValue ("application/json"));
 
-            zoneId = JObject.Parse (msg).ToObject<ZoneIdData> ().result[0].id;
-        }
+                DnsCreate dnsCreate;
+                string publicIP = GetIP ();
 
-        private async Task<List<string>> getDnsList (HttpClient client) {
-            string dnslisturi = string.Format ("https://api.cloudflare.com/client/v4/zones/{0}/dns_records", zoneId);
-            var data = await client.GetStringAsync (dnslisturi);
+                foreach (var item in dnsIDToUpdate) {
+                    dnsCreate = new DnsCreate () {
+                        type = "A",
+                        name = item.Key.Split ('.') [0],
+                        content = publicIP,
+                        ttl = 120,
+                        priority = 10,
+                        proxied = true
+                    };
 
-            var dnsObjlist = JObject.Parse (data).ToObject<DnsListData> ().result;
-            List<string> temp = new List<string> ();
-            foreach (var item in dnsObjlist) {
-                temp.Add (item.name);
+                    using (var content = new StringContent (Newtonsoft.Json.JsonConvert.SerializeObject (dnsCreate), System.Text.Encoding.UTF8, "application/json")) {
+                        string dnsListUri = string.Format ("https://api.cloudflare.com/client/v4/zones/{0}/dns_records/{1}", zoneId, item.Value);
+                        var res = await client.PutAsync (dnsListUri, content);
+
+                    }
+                }
             }
-            return temp;
         }
-        private string getPublicIp () {
-            return "87.71.231.222";
+        public string GetIP () {
+            string externalIP = "";
+            externalIP = (new System.Net.WebClient ()).DownloadString ("http://checkip.dyndns.org/");
+            externalIP = (new System.Text.RegularExpressions.Regex (@"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}")).Matches (externalIP) [0].ToString ();
+            return externalIP;
         }
     }
 }
