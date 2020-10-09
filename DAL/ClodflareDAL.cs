@@ -124,6 +124,24 @@ namespace DDNS.DAL {
                 }
             }
         }
+
+        public async Task deleteARecordesClodflare (List<string> dnsIDToUpdate) {
+            using (var client = new HttpClient ()) {
+
+                client.DefaultRequestHeaders.Accept.Clear ();
+                client.DefaultRequestHeaders.Add ("X-Auth-Email", email);
+                client.DefaultRequestHeaders.Add ("X-Auth-Key", toekn);
+                client.DefaultRequestHeaders.Accept
+                    .Add (new MediaTypeWithQualityHeaderValue ("application/json"));
+
+                foreach (var item in dnsIDToUpdate) {
+
+                    string dnsListUri = string.Format ("https://api.cloudflare.com/client/v4/zones/{0}/dns_records/{1}", zoneId, item);
+                    var res = await client.DeleteAsync (dnsListUri);
+
+                }
+            }
+        }
         public string GetIP () {
             string externalIP = "";
             externalIP = (new System.Net.WebClient ()).DownloadString ("http://checkip.dyndns.org/");
