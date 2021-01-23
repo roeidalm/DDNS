@@ -3,26 +3,61 @@ using System.Net.Http;
 using DDNS.DAL;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 
-namespace DDNS.Controllers {
+namespace DDNS.Controllers
+{
     [ApiController]
-    [Route ("[controller]")]
-    public class AdministrationController : ControllerBase {
-        private static readonly HttpClient client = new HttpClient ();
+    [Route("[controller]")]
+    public class AdministrationController : ControllerBase
+    {
+        private static readonly HttpClient client = new HttpClient();
         private readonly ILogger<WeatherForecastController> _logger;
 
-        private static List<string> dnsList = new List<string> ();
-        private static List<string> services = new List<string> ();
+        private static List<string> dnsList = new List<string>();
+        private static List<string> services = new List<string>();
 
-        public AdministrationController (ILogger<WeatherForecastController> logger) {
+        public AdministrationController(ILogger<WeatherForecastController> logger)
+        {
             _logger = logger;
         }
 
         [HttpGet]
-        public IEnumerable<string> Get () {
-            ClodflareDAL dal = new ClodflareDAL ();
-            var f = dal.GetIP ();
-            return new List<string> () { "value 1", "value 2" };
+        public string Get()
+        {
+            updateIps();
+            ClodflareDAL clodflareDal = new ClodflareDAL();
+            var a = clodflareDal.getDnsList();
+            var d = JsonConvert.SerializeObject(a);
+            return d;
+        }
+        void updateIps()
+        {
+            traefikDAL traefikDal = new traefikDAL();
+            ClodflareDAL clodflareDal = new ClodflareDAL();
+            string publicip = clodflareDal.GetIP();
+            var a = traefikDal.ProcessRepositories().Result;
+            var b = clodflareDal.getDnsList();
+
+            Dictionary<string, string> updateList = new Dictionary<string, string>();
+            List<string> createList = new List<string>();
+
+            foreach (var item in a)
+            {
+                if (b.ContainsKey(item))
+                {
+                    if (b[item].IPAddr != publicip)
+                    {
+                        updateList.Add(item, b[item].ID);
+                    }
+                }
+                else
+                {
+                    createList.Add(item);
+                }
+            }
+            clodflareDal.updateARecordes(updateList);
+            clodflareDal.createNewARecordes(createList);
         }
         // void tenmp () {
         //     using (var httpClientHandler = new HttpClientHandler ()) {

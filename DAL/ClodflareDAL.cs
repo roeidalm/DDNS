@@ -14,7 +14,7 @@ namespace DDNS.DAL
         private static string email = EnvironmentHelper.Arguments["email"];
         private static string toekn = EnvironmentHelper.Arguments["toeknclodflare"];
         private static string zoneId = "";
-        private static Dictionary<string, string> dnsList;
+        private static Dictionary<string, DnsRecord> dnsList;
         static ClodflareDAL()
         {
 
@@ -72,7 +72,7 @@ namespace DDNS.DAL
                         if (res.StatusCode == System.Net.HttpStatusCode.OK)
                         {
                             var a = res.Content.ReadAsStringAsync().Result;
-                            dnsList.Add(item, "");
+                            dnsList.Add(item, new DnsRecord("id", publicIP));
                         }
                     }
                 }
@@ -89,12 +89,12 @@ namespace DDNS.DAL
                 client.DefaultRequestHeaders.Accept
                     .Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-                DnsCreate dnsCreate;
+                DnsCreate dnsUpdate;
                 string publicIP = GetIP();
 
                 foreach (var item in dnsIDToUpdate)
                 {
-                    dnsCreate = new DnsCreate()
+                    dnsUpdate = new DnsCreate()
                     {
                         type = "A",
                         name = item.Key.Split('.')[0],
@@ -104,11 +104,14 @@ namespace DDNS.DAL
                         proxied = true
                     };
 
-                    using (var content = new StringContent(Newtonsoft.Json.JsonConvert.SerializeObject(dnsCreate), System.Text.Encoding.UTF8, "application/json"))
+                    using (var content = new StringContent(Newtonsoft.Json.JsonConvert.SerializeObject(dnsUpdate), System.Text.Encoding.UTF8, "application/json"))
                     {
                         string dnsListUri = string.Format("https://api.cloudflare.com/client/v4/zones/{0}/dns_records/{1}", zoneId, item.Value);
                         var res = await client.PutAsync(dnsListUri, content);
-
+                        if (res.StatusCode == System.Net.HttpStatusCode.OK)
+                        {
+                            var a = res.Content.ReadAsStringAsync().Result;
+                        }
                     }
                 }
             }
@@ -134,7 +137,7 @@ namespace DDNS.DAL
                 }
             }
         }
-        public Dictionary<string, string> getDnsList()
+        public Dictionary<string, DnsRecord> getDnsList()
         {
             if (dnsList == null)
             {
@@ -160,10 +163,10 @@ namespace DDNS.DAL
                     var awiter = client.GetStringAsync(dnslisturi).GetAwaiter();
                     var data = awiter.GetResult();
                     var dnsObjlist = JObject.Parse(data).ToObject<DnsListData>().result;
-                    Dictionary<string, string> temp = new Dictionary<string, string>();
+                    Dictionary<string, DnsRecord> temp = new Dictionary<string, DnsRecord>();
                     foreach (var item in dnsObjlist)
                     {
-                        temp.Add(item.name, item.id);
+                        temp.Add(item.name, new DnsRecord(item.id, item.content));
                     }
                     dnsList = temp;
                 }
