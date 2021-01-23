@@ -21,10 +21,10 @@ namespace DDNS.Controllers {
 
         [HttpGet]
         public IEnumerable<string> Get () {
-            ClodflareDAL dal = new ClodflareDAL ();
-            var a = dal.getDnsList ();
+            traefikDAL dal = new traefikDAL ();
+            var a = dal.ProcessRepositories ().Result;
 
-            return a.Keys.ToList ();
+            return a.ToList ();
         }
     }
 }
